@@ -34,6 +34,7 @@ class SignUp(Resource):
         try:
             with sqlite3.connect('database.db') as con:
                 cur = con.cursor()
+
                 # check if the user already exists
                 cur.execute('''
                     SELECT *
@@ -50,7 +51,9 @@ class SignUp(Resource):
                             VALUES (?, ?)
                             ''', (data['email'], pw_hash))
                 con.commit()
-                return {'message': 'Sign up successful'}, 200
+
+                access_token = create_access_token(identity=data['email'])
+                return {'message': 'Sign up successful', 'access_token': access_token}, 200
         except:
             con.rollback()
             return {'error': 'Sign up failed'}, 500
@@ -91,8 +94,29 @@ class Login(Resource):
 class CheckLogin(Resource):
     @jwt_required()
     def get(self):
-        current_user = get_jwt_identity()
-        return {'logged_in_as': current_user}, 200
+        current_user_email = get_jwt_identity()
+
+        try:
+            with sqlite3.connect('database.db') as con:
+                con.row_factory = sqlite3.Row
+
+                cur = con.cursor()
+                # find user_id
+                cur.execute('''
+                    SELECT id
+                    FROM users
+                    WHERE email = ?
+                            ''', (current_user_email,))
+                user = cur.fetchone()
+
+                if user:
+                    return {'logged_in_as': current_user_email, 'user_id': user['id']}, 200
+                else:
+                    return {'error': 'User not found'}, 404
+        except:
+            return {'error': 'Error has occurred'}, 500
+        finally:
+            con.close()
 
 if __name__ == '__main__':
     app.run(debug=True)

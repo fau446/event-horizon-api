@@ -17,3 +17,4 @@ build/
 create_tables.py
 drop_tables.py
 database.db
+create_test_data.py
