@@ -25,6 +25,28 @@ signup_and_login_model = api.model('SignUp', {
 auth_ns = api.namespace('auth', description='Authentication operations')
 event_ns = api.namespace('events', description='Event operations')
 
+def fetch_user_id(email):
+    try:
+        with sqlite3.connect('database.db') as con:
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+
+            cur.execute('''
+                        SELECT id
+                        FROM users
+                        WHERE email = ?
+                        ''', (email,))
+            user = cur.fetchone()
+
+            if user:
+                return user['id']
+            else:
+                return None
+    except:
+        return None
+    finally:
+        con.close()
+
 @auth_ns.route('/sign_up')
 class SignUp(Resource):
     @auth_ns.expect(signup_and_login_model)
@@ -96,34 +118,22 @@ class CheckLogin(Resource):
     @jwt_required()
     def get(self):
         current_user_email = get_jwt_identity()
+        user_id = fetch_user_id(current_user_email)
 
-        try:
-            with sqlite3.connect('database.db') as con:
-                con.row_factory = sqlite3.Row
-
-                cur = con.cursor()
-                # find user_id
-                cur.execute('''
-                    SELECT id
-                    FROM users
-                    WHERE email = ?
-                            ''', (current_user_email,))
-                user = cur.fetchone()
-
-                if user:
-                    return {'logged_in_as': current_user_email, 'user_id': user['id']}, 200
-                else:
-                    return {'error': 'User not found'}, 404
-        except:
-            return {'error': 'Error has occurred'}, 500
-        finally:
-            con.close()
+        if not user_id:
+            return {'error': 'User not found'}, 404
+        else:
+            return {'logged_in_as': current_user_email}, 200
 
 @event_ns.route('/')
 class Events(Resource):
     @jwt_required()
     def get(self):
         current_user_email = get_jwt_identity()
+        user_id = fetch_user_id(current_user_email)
+
+        if not user_id:
+            return {'error': 'User not found'}, 404
 
         try:
             with sqlite3.connect('database.db') as con:
@@ -131,24 +141,12 @@ class Events(Resource):
 
                 cur = con.cursor()
 
-                # get the user id
-                cur.execute('''
-                            SELECT id
-                            FROM users
-                            WHERE email = ?
-                            ''', (current_user_email,))
-                
-                user = cur.fetchone()
-
-                if not user:
-                    return {'error': 'User not found'}, 404
-
                 # fetch all events that matches the user id
                 cur.execute('''
                     SELECT *
                     FROM events
                     WHERE user_id = ?
-                ''', (user['id'],))
+                ''', (user_id,))
 
                 events = cur.fetchall()
                 
