@@ -23,6 +23,7 @@ signup_and_login_model = api.model('SignUp', {
 
 
 auth_ns = api.namespace('auth', description='Authentication operations')
+event_ns = api.namespace('events', description='Event operations')
 
 @auth_ns.route('/sign_up')
 class SignUp(Resource):
@@ -117,6 +118,52 @@ class CheckLogin(Resource):
             return {'error': 'Error has occurred'}, 500
         finally:
             con.close()
+
+@event_ns.route('/')
+class Events(Resource):
+    @jwt_required()
+    def get(self):
+        current_user_email = get_jwt_identity()
+
+        try:
+            with sqlite3.connect('database.db') as con:
+                con.row_factory = sqlite3.Row
+
+                cur = con.cursor()
+
+                # get the user id
+                cur.execute('''
+                            SELECT id
+                            FROM users
+                            WHERE email = ?
+                            ''', (current_user_email,))
+                
+                user = cur.fetchone()
+
+                if not user:
+                    return {'error': 'User not found'}, 404
+
+                # fetch all events that matches the user id
+                cur.execute('''
+                    SELECT *
+                    FROM events
+                    WHERE user_id = ?
+                ''', (user['id'],))
+
+                events = cur.fetchall()
+                
+                if events:
+                    events_list = [dict(event) for event in events]
+                    return {'events_list': events_list}, 200
+                else:
+                    return {'events_list': []}, 200
+
+        except Exception as e:
+            return {'error': str(e)}, 500
+        finally:
+            con.close()
+
+    # post route for adding an event, jwt required
 
 if __name__ == '__main__':
     app.run(debug=True)
