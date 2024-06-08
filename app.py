@@ -151,7 +151,7 @@ class Events(Resource):
 
                 # fetch all events that matches the user id
                 cur.execute('''
-                    SELECT *
+                    SELECT id, title, body, start_time, end_time, status, category
                     FROM events
                     WHERE user_id = ?
                 ''', (user_id,))
