@@ -30,6 +30,16 @@ events_model = api.model('Event', {
     'category': fields.String(required=True)
 })
 
+events_update_model = api.model('Update event', {
+    'id': fields.Integer(required=True, description='Event id'),
+    'title': fields.String(required=True, description='Event title'),
+    'body': fields.String(required=True, description='Event description'),
+    'start_time': fields.DateTime(required=True, description='Event start time', example='2024-06-01T10:00:00'),
+    'end_time': fields.DateTime(required=True, description='Event end time', example='2024-06-01T11:00:00'),
+    'status': fields.String(required=True, description='Event status'),
+    'category': fields.String(required=True)
+})
+
 auth_ns = api.namespace('auth', description='Authentication operations')
 event_ns = api.namespace('events', description='Event operations')
 
@@ -194,6 +204,51 @@ class Events(Resource):
             return {'error': str(e)}, 500
         finally:
             con.close()
+        
+    @jwt_required()
+    @event_ns.expect(events_update_model)
+    def put(self):
+        data = request.json
+        current_user_email = get_jwt_identity()
+        user_id = fetch_user_id(current_user_email)
+        if not user_id:
+            return {'error': 'User not found'}, 404
+        
+        try:
+            with sqlite3.connect('database.db') as con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+
+                # check if the event exists and belongs to the user
+                cur.execute('''
+                            SELECT user_id
+                            FROM events
+                            WHERE id = ?
+                            ''', (data['id'],))
+                event = cur.fetchone()
+
+                if not event:
+                    return {'error': 'Event not found'}, 404
+                elif event['user_id'] != user_id:
+                    return {'error': 'Unauthorized'}, 403
+
+                # update event
+                cur.execute('''
+                            UPDATE events
+                            SET title = ?, body = ?, start_time = ?, end_time = ?, status = ?, category = ?
+                            WHERE id = ?
+                            ''', (data['title'], data['body'], data['start_time'], data['end_time'], data['status'], data['category'], data['id'],))
+
+                con.commit()
+
+                return {'message': 'Event was successfully edited.'}, 200
+        except Exception as e:
+            con.rollback()
+            return {'error': str(e)}, 500
+        finally:
+            con.close()
+        
+        
 
 if __name__ == '__main__':
     app.run(debug=True)
