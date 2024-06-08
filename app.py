@@ -21,6 +21,14 @@ signup_and_login_model = api.model('SignUp', {
     'password': fields.String(required=True, description='User password')
 })
 
+events_model = api.model('Event', {
+    'title': fields.String(required=True, description='Event title'),
+    'body': fields.String(required=True, description='Event description'),
+    'start_time': fields.DateTime(required=True, description='Event start time', example='2024-06-01T10:00:00'),
+    'end_time': fields.DateTime(required=True, description='Event end time', example='2024-06-01T11:00:00'),
+    'status': fields.String(required=True, description='Event status'),
+    'category': fields.String(required=True)
+})
 
 auth_ns = api.namespace('auth', description='Authentication operations')
 event_ns = api.namespace('events', description='Event operations')
@@ -161,7 +169,31 @@ class Events(Resource):
         finally:
             con.close()
 
-    # post route for adding an event, jwt required
+    @jwt_required()
+    @event_ns.expect(events_model)
+    def post(self):
+        data = request.json
+        current_user_email = get_jwt_identity()
+        user_id = fetch_user_id(current_user_email)
+        if not user_id:
+            return {'error': 'User not found'}, 404
+
+        try:
+            with sqlite3.connect('database.db') as con:
+                cur = con.cursor()
+
+                cur.execute('''
+                            INSERT INTO events (title, body, user_id, start_time, end_time, status, category)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            ''', (data['title'], data['body'], user_id, data['start_time'], data['end_time'], data['status'], data['category'],))
+                con.commit()
+
+                return {'message': 'Event creation successful'}, 201
+        except Exception as e:
+            con.rollback()
+            return {'error': str(e)}, 500
+        finally:
+            con.close()
 
 if __name__ == '__main__':
     app.run(debug=True)
