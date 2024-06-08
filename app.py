@@ -40,6 +40,10 @@ events_update_model = api.model('Update event', {
     'category': fields.String(required=True)
 })
 
+events_delete_model = api.model('Delete event', {
+    'id': fields.Integer(required=True, description='Event id')
+})
+
 auth_ns = api.namespace('auth', description='Authentication operations')
 event_ns = api.namespace('events', description='Event operations')
 
@@ -248,7 +252,50 @@ class Events(Resource):
         finally:
             con.close()
         
+    @jwt_required()
+    @event_ns.expect(events_delete_model)
+    def delete(self):
+        data = request.json
+        current_user_email = get_jwt_identity()
+        user_id = fetch_user_id(current_user_email)
+        if not user_id:
+            return {'error': 'User not found'}, 404
         
+        try:
+            with sqlite3.connect('database.db') as con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+
+                # check if the event exists and belongs to the user
+                cur.execute('''
+                            SELECT user_id
+                            FROM events
+                            WHERE id = ?
+                            ''', (data['id'],))
+                event = cur.fetchone()
+
+                if not event:
+                    return {'error': 'Event not found'}, 404
+                elif event['user_id'] != user_id:
+                    return {'error': 'Unauthorized'}, 403
+                
+                # delete event
+                cur.execute('''
+                            DELETE FROM events
+                            WHERE id = ?
+                            ''', (data['id'],))
+                con.commit()
+
+                return {'message': 'Event deleted.'}, 200
+        except sqlite3.Error as e:    
+            con.rollback()
+            return {'error': f'Event deletion failed: {str(e)}'}, 500
+        except Exception as e:
+            con.rollback()
+            return {'error': str(e)}, 500
+        finally:
+            con.close()
+    
 
 if __name__ == '__main__':
     app.run(debug=True)
