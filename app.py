@@ -187,6 +187,13 @@ class Events(Resource):
     @event_ns.expect(events_model)
     def post(self):
         data = request.json
+
+        # check if data contains fields that are empty
+        required_fields = ['title', 'body', 'start_time', 'end_time', 'status', 'category']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        if missing_fields:
+            return {'error': f'Missing fields: {", ".join(missing_fields)}'}, 400
+
         current_user_email = get_jwt_identity()
         user_id = fetch_user_id(current_user_email)
         if not user_id:
