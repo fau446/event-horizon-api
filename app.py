@@ -55,8 +55,14 @@ events_delete_model = api.model('Delete event', {
     'id': fields.Integer(required=True, description='Event id')
 })
 
+category_model = api.model('Category', {
+    'old_name': fields.String(required=True, description='Old category name'),
+    'new_name': fields.String(required=True, description='New category name')
+})
+
 auth_ns = api.namespace('auth', description='Authentication operations')
 event_ns = api.namespace('events', description='Event operations')
+category_ns = api.namespace('category', description='Category operations')
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -289,6 +295,32 @@ class Events(Resource):
             db.session.commit()
             return {'message': 'Event was successfully deleted!'}, 200
         except Exception as e:
+            return {'error': str(e)}, 500
+
+@category_ns.route('/')
+class Category(Resource):
+    @jwt_required()
+    @category_ns.expect(category_model)
+    def put(self):
+        data = request.json
+
+        try:
+            current_user_email = get_jwt_identity()
+            user = User.query.filter_by(email=current_user_email).first()
+            if not user:
+                return {'error': 'User not found'}, 404
+        
+            events_to_update = Event.query.filter_by(user_id=user.id, category=data['old_name']).all()
+            if not events_to_update:
+                return {'error', 'No events found with the specified category!'}, 404
+
+            for event in events_to_update:
+                event.category = data['new_name'] 
+
+            db.session.commit()
+            return {'message': 'Category name was successfully changed!'}, 200
+        except Exception as e:
+            db.session.rollback()
             return {'error': str(e)}, 500
 
 if __name__ == '__main__':
