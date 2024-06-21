@@ -3,6 +3,7 @@ from flask_restx import Api, Resource, fields
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.sql import func
 from flask_jwt_extended import (
     create_access_token,
     get_jwt,
@@ -12,6 +13,7 @@ from flask_jwt_extended import (
 )
 import os
 from dotenv import load_dotenv
+from datetime import datetime, timezone
 
 load_dotenv()
 
@@ -74,6 +76,21 @@ class Event(db.Model):
     status = db.Column(db.String(50))
     category = db.Column(db.String(50))
 
+class TokenBlocklist(db.Model):
+    __tablename__ = 'token_blocklist'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    jti = db.Column(db.String(36), nullable=False, index=True)
+    type = db.Column(db.String(16), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, server_default=func.now(), nullable=False)
+
+@jwt.token_in_blocklist_loader
+def check_if_token_revoked(jwt_header, jwt_payload: dict) -> bool:
+    jti = jwt_payload["jti"]
+    token = db.session.query(TokenBlocklist.id).filter_by(jti=jti).scalar()
+
+    return token is not None
+
 @auth_ns.route('/sign_up')
 class SignUp(Resource):
     @auth_ns.expect(signup_and_login_model)
@@ -127,6 +144,26 @@ class CheckLogin(Resource):
                 return {'message':'Authentication successful!' ,'logged_in_as': current_user_email}, 200
         except Exception as e:
             return {'error': f'Authentication failed: {str(e)}'}, 500
+
+@auth_ns.route('/logout')
+class Logout(Resource):
+    @jwt_required(verify_type=False)
+    def post(self):
+        try:
+            current_user_email = get_jwt_identity()
+            user = User.query.filter_by(email=current_user_email).first()
+
+            token = get_jwt()
+            jti = token['jti']
+            ttype = token['type']
+            now = datetime.now(timezone.utc)
+            db.session.add(TokenBlocklist(jti=jti, type=ttype, user_id=user.id, created_at=now))
+            db.session.commit()
+            
+            return {'message': 'Logout success!'}, 200
+        except Exception as e:
+            db.session.rollback()
+            return {'error': str(e)}, 500
 
 @event_ns.route('/')
 class Events(Resource):
