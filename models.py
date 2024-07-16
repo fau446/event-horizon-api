@@ -34,10 +34,15 @@ def initialize_api_models(api):
         'new_name': fields.String(required=True, description='New category name')
     })
 
+    category_delete_model = api.model('Delete category', {
+        'name': fields.String(required=True, description='Category name')
+    })
+
     return {
         'signup_and_login_model': signup_and_login_model,
         'events_model': events_model,
         'events_update_model': events_update_model,
         'events_delete_model': events_delete_model,
-        'category_model': category_model
+        'category_model': category_model,
+        'category_delete_model': category_delete_model
     }
