@@ -2,7 +2,6 @@ from flask import Flask, request
 from flask_restx import Api, Resource, fields
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.sql import func
 from flask_jwt_extended import (
     create_access_token,
@@ -15,80 +14,32 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 
+from models import initialize_api_models
+from classes import db, User, Event, TokenBlocklist
+
 load_dotenv()
 
 app = Flask(__name__)
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
-db = SQLAlchemy(app)
+db.init_app(app)
 
 jwt = JWTManager(app)
 api = Api(app)
 bcrypt = Bcrypt(app)
 cors = CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}}) # Add link to env after
 
-signup_and_login_model = api.model('SignUp', {
-    'email': fields.String(required=True, description='User email'),
-    'password': fields.String(required=True, description='User password')
-})
-
-events_model = api.model('Event', {
-    'title': fields.String(required=True, description='Event title'),
-    'body': fields.String(required=True, description='Event description'),
-    'start_time': fields.DateTime(required=True, description='Event start time', example='2024-06-01T10:00:00'),
-    'end_time': fields.DateTime(required=True, description='Event end time', example='2024-06-01T11:00:00'),
-    'status': fields.String(required=True, description='Event status'),
-    'category': fields.String(required=True)
-})
-
-events_update_model = api.model('Update event', {
-    'id': fields.Integer(required=True, description='Event id'),
-    'title': fields.String(required=True, description='Event title'),
-    'body': fields.String(required=True, description='Event description'),
-    'start_time': fields.DateTime(required=True, description='Event start time', example='2024-06-01T10:00:00'),
-    'end_time': fields.DateTime(required=True, description='Event end time', example='2024-06-01T11:00:00'),
-    'status': fields.String(required=True, description='Event status'),
-    'category': fields.String(required=True)
-})
-
-events_delete_model = api.model('Delete event', {
-    'id': fields.Integer(required=True, description='Event id')
-})
-
-category_model = api.model('Category', {
-    'old_name': fields.String(required=True, description='Old category name'),
-    'new_name': fields.String(required=True, description='New category name')
-})
+# Initialize API models
+models = initialize_api_models(api)
+signup_and_login_model = models['signup_and_login_model']
+events_model = models['events_model']
+events_update_model = models['events_update_model']
+events_delete_model = models['events_delete_model']
+category_model = models['category_model']
 
 auth_ns = api.namespace('auth', description='Authentication operations')
 event_ns = api.namespace('events', description='Event operations')
 category_ns = api.namespace('category', description='Category operations')
-
-class User(db.Model):
-    __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    email = db.Column(db.String(50), nullable=False, unique=True)
-    password_hash = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
-
-class Event(db.Model):
-    __tablename__ = 'events'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    title = db.Column(db.String(100), nullable=False)
-    body = db.Column(db.Text)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    start_time = db.Column(db.DateTime, nullable=False)
-    end_time = db.Column(db.DateTime, nullable=False)
-    status = db.Column(db.String(50))
-    category = db.Column(db.String(50))
-
-class TokenBlocklist(db.Model):
-    __tablename__ = 'token_blocklist'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    jti = db.Column(db.String(36), nullable=False, index=True)
-    type = db.Column(db.String(16), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, server_default=func.now(), nullable=False)
 
 @jwt.token_in_blocklist_loader
 def check_if_token_revoked(jwt_header, jwt_payload: dict) -> bool:
@@ -97,6 +48,8 @@ def check_if_token_revoked(jwt_header, jwt_payload: dict) -> bool:
 
     return token is not None
 
+
+# Auth Routes
 @auth_ns.route('/sign_up')
 class SignUp(Resource):
     @auth_ns.expect(signup_and_login_model)
@@ -171,6 +124,8 @@ class Logout(Resource):
             db.session.rollback()
             return {'error': str(e)}, 500
 
+
+# Event routes
 @event_ns.route('/')
 class Events(Resource):
     @jwt_required()
@@ -297,6 +252,8 @@ class Events(Resource):
         except Exception as e:
             return {'error': str(e)}, 500
 
+
+# Category routes
 @category_ns.route('/')
 class Category(Resource):
     @jwt_required()
