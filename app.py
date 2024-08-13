@@ -12,7 +12,7 @@ from flask_jwt_extended import (
 )
 import os
 from dotenv import load_dotenv
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from models import initialize_api_models
 from classes import db, User, Event, TokenBlocklist
@@ -21,13 +21,14 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=4)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
 db.init_app(app)
 
 jwt = JWTManager(app)
 api = Api(app)
 bcrypt = Bcrypt(app)
-cors = CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}}) # Add link to env after
+cors = CORS(app)
 
 # Initialize API models
 models = initialize_api_models(api)
