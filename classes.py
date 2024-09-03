@@ -19,7 +19,14 @@ class Event(db.Model):
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime, nullable=False)
     status = db.Column(db.String(50))
-    category = db.Column(db.String(50))
+    category_id = db.Column(db.String(50), db.ForeignKey('categories.id'))
+
+class CategoryTable(db.Model):
+    __tablename__ = 'categories'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(50))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    color = db.Column(db.String(50))
 
 class TokenBlocklist(db.Model):
     __tablename__ = 'token_blocklist'

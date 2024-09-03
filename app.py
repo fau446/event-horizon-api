@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timezone, timedelta
 
 from models import initialize_api_models
-from classes import db, User, Event, TokenBlocklist
+from classes import db, User, Event, CategoryTable, TokenBlocklist
 
 load_dotenv()
 
@@ -36,8 +36,9 @@ signup_and_login_model = models['signup_and_login_model']
 events_model = models['events_model']
 events_update_model = models['events_update_model']
 events_delete_model = models['events_delete_model']
-category_model = models['category_model']
+category_put_model = models['category_put_model']
 category_delete_model = models['category_delete_model']
+category_color_change_model = models['category_color_change_model']
 
 auth_ns = api.namespace('auth', description='Authentication operations')
 event_ns = api.namespace('events', description='Event operations')
@@ -150,7 +151,7 @@ class Events(Resource):
                         'start_time': event.start_time.isoformat(),
                         'end_time': event.end_time.isoformat(),
                         'status': event.status,
-                        'category': event.category
+                        'category_id': event.category_id
                     }
                     for event in events
                 ]
@@ -167,7 +168,7 @@ class Events(Resource):
         data = request.json
 
         # check if data contains fields that are empty
-        required_fields = ['title', 'body', 'start_time', 'end_time', 'status', 'category']
+        required_fields = ['title', 'body', 'start_time', 'end_time', 'status', 'categoryName']
         missing_fields = [field for field in required_fields if not data.get(field)]
         if missing_fields:
             return {'error': f'Missing fields: {", ".join(missing_fields)}'}, 400
@@ -180,6 +181,24 @@ class Events(Resource):
             if not user:
                 return {'error': 'User not found'}, 404
             
+            # check if category already exists
+            category = CategoryTable.query.filter_by(name=data['categoryName'], user_id=user.id).first()
+
+            # category_id = 0
+
+            if category:
+                category_id = category.id
+            else:
+                new_category = CategoryTable(
+                    name=data['categoryName'],
+                    user_id= user.id,
+                    color=data['categoryColor'],
+                )
+                db.session.add(new_category)
+                db.session.flush()
+                category_id = new_category.id
+
+
             new_event = Event(
                 title=data['title'],
                 body=data['body'],
@@ -187,7 +206,7 @@ class Events(Resource):
                 start_time=data['start_time'],
                 end_time=data['end_time'],
                 status=data['status'],
-                category=data['category']
+                category_id=category_id
             )
             db.session.add(new_event)
             db.session.commit()
@@ -214,6 +233,24 @@ class Events(Resource):
                 return {'error': 'Event not found'}, 404
             elif event.user_id != user.id:
                 return {'error': 'Unauthorized'}, 403
+
+            # check if category already exists
+            category = CategoryTable.query.filter_by(name=data['categoryName'], user_id=user.id).first()
+
+            old_category_id = event.category_id
+
+            if category:
+                event.category_id = category.id
+            else:
+                print("new category")
+                new_category = CategoryTable(
+                    name=data['categoryName'],
+                    user_id= user.id,
+                    color=data['categoryColor'],
+                )
+                db.session.add(new_category)
+                db.session.flush()
+                event.category_id = new_category.id
             
             # update the event
             event.title = data['title']
@@ -221,7 +258,16 @@ class Events(Resource):
             event.start_time = data['start_time']
             event.end_time = data['end_time']
             event.status = data['status']
-            event.category = data['category']
+            db.session.flush()
+            
+            # delete the category if there are no more events
+            remaining_events = Event.query.filter_by(category_id=old_category_id, user_id=user.id).first()
+            print("test1")
+            if not remaining_events:
+                # delete the category
+                print("Delete Category")
+                category = CategoryTable.query.filter_by(id=old_category_id, user_id=user.id).first()
+                db.session.delete(category)
 
             db.session.commit()
             return {'message': 'Event was successfully edited!'}, 200
@@ -247,8 +293,19 @@ class Events(Resource):
             elif event.user_id != user.id:
                 return {'error': 'Unauthorized'}, 403
             
-            # delete the event
+            category_id = event.category_id
+            
             db.session.delete(event)
+            db.session.flush()
+
+            # delete the category if there are no more events
+            remaining_events = Event.query.filter_by(category_id=category_id, user_id=user.id).first()
+
+            if not remaining_events:
+                # delete the category
+                category = CategoryTable.query.filter_by(id=category_id, user_id=user.id).first()
+                db.session.delete(category)
+
             db.session.commit()
             return {'message': 'Event was successfully deleted!'}, 200
         except Exception as e:
@@ -259,7 +316,33 @@ class Events(Resource):
 @category_ns.route('/')
 class Category(Resource):
     @jwt_required()
-    @category_ns.expect(category_model)
+    def get(self):
+        try:
+            current_user_email = get_jwt_identity()
+            user = User.query.filter_by(email=current_user_email).first()
+            if not user:
+                return {'error': 'User not found'}, 404
+
+            categories = CategoryTable.query.filter_by(user_id=user.id).all()
+
+            if categories:
+                category_list = [
+                    {
+                        'category_id': category.id,
+                        'name': category.name,
+                        'color': category.color
+                    }
+                    for category in categories
+                ]
+
+                return {'category_list': category_list}, 200
+            else:
+                return {'category_list': []}, 200
+        except Exception as e:
+            return {'error': str(e)}, 500
+
+    @jwt_required()
+    @category_ns.expect(category_put_model)
     def put(self):
         data = request.json
 
@@ -268,13 +351,9 @@ class Category(Resource):
             user = User.query.filter_by(email=current_user_email).first()
             if not user:
                 return {'error': 'User not found'}, 404
-        
-            events_to_update = Event.query.filter_by(user_id=user.id, category=data['old_name']).all()
-            if not events_to_update:
-                return {'error', 'No events found with the specified category!'}, 404
 
-            for event in events_to_update:
-                event.category = data['new_name'] 
+            category_to_update = CategoryTable.query.filter_by(id=data['id'], user_id=user.id).first()
+            category_to_update.name = data['new_name']
 
             db.session.commit()
             return {'message': 'Category name was successfully changed!'}, 200
@@ -293,18 +372,52 @@ class Category(Resource):
             if not user:
                 return {'error': 'User not found'}, 404
 
-            events_to_delete = Event.query.filter_by(user_id=user.id, category=data['name']).all()
-            if not events_to_delete:
-                return {'error', 'No events found with the specified category'}, 404
+            events_to_delete = Event.query.filter_by(user_id=user.id, category_id=data['id']).all()
+            # if not events_to_delete:
+            #     return {'error', 'No events found with the specified category'}, 404
+
+            if events_to_delete:
+                for event in events_to_delete:
+                    db.session.delete(event)
             
-            for event in events_to_delete:
-                db.session.delete(event)
+            category_to_delete = CategoryTable.query.filter_by(user_id=user.id, id=data['id']).first()
+
+            if category_to_delete:
+                db.session.delete(category_to_delete)
+            
 
             db.session.commit()
             return {'message': 'Category was successfully deleted!'}, 200
         except Exception as e:
             db.session.rollback()
             return {'error': str(e)}, 500
+
+@category_ns.route('/color')
+class CatgoryColor(Resource):
+    @jwt_required()
+    @category_ns.expect(category_color_change_model)
+    def put(self):
+        data = request.json
+
+        try:
+            current_user_email = get_jwt_identity()
+            user = User.query.filter_by(email=current_user_email).first()
+            if not user:
+                return {'error': 'User not found'}, 404
+            
+            category = CategoryTable.query.filter_by(id=data['id'], user_id=user.id).first()
+
+            if not category:
+                return {'error': 'Category not found'}, 404
+            
+            category.color = data['new_color']
+            db.session.commit()
+
+            return {'message': 'Category color was successfully changed!'}, 200
+        except Exception as e:
+            db.session.rollback()
+            return {'error': str(e)}, 500
+        
 
 if __name__ == '__main__':
     app.run(debug=True)

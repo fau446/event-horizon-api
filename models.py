@@ -12,7 +12,8 @@ def initialize_api_models(api):
         'start_time': fields.DateTime(required=True, description='Event start time', example='2024-06-01T10:00:00'),
         'end_time': fields.DateTime(required=True, description='Event end time', example='2024-06-01T11:00:00'),
         'status': fields.String(required=True, description='Event status'),
-        'category': fields.String(required=True)
+        'categoryName': fields.String(required=True),
+        'categoryColor': fields.String(required=True)
     })
 
     events_update_model = api.model('Update event', {
@@ -22,20 +23,26 @@ def initialize_api_models(api):
         'start_time': fields.DateTime(required=True, description='Event start time', example='2024-06-01T10:00:00'),
         'end_time': fields.DateTime(required=True, description='Event end time', example='2024-06-01T11:00:00'),
         'status': fields.String(required=True, description='Event status'),
-        'category': fields.String(required=True)
+        'categoryName': fields.String(required=True),
+        'categoryColor': fields.String(required=True)
     })
 
     events_delete_model = api.model('Delete event', {
         'id': fields.Integer(required=True, description='Event id')
     })
 
-    category_model = api.model('Category', {
-        'old_name': fields.String(required=True, description='Old category name'),
+    category_put_model = api.model('Edit category name', {
+        'id': fields.Integer(required=True, description='Category id'),
         'new_name': fields.String(required=True, description='New category name')
     })
 
     category_delete_model = api.model('Delete category', {
-        'name': fields.String(required=True, description='Category name')
+        'id': fields.Integer(required=True, description='Category id')
+    })
+
+    category_color_change_model = api.model('Change category color', {
+        'id': fields.Integer(required=True, description='Category id'),
+        'new_color': fields.String(required=True, description='New category color')
     })
 
     return {
@@ -43,6 +50,7 @@ def initialize_api_models(api):
         'events_model': events_model,
         'events_update_model': events_update_model,
         'events_delete_model': events_delete_model,
-        'category_model': category_model,
-        'category_delete_model': category_delete_model
+        'category_put_model': category_put_model,
+        'category_delete_model': category_delete_model,
+        'category_color_change_model': category_color_change_model
     }
