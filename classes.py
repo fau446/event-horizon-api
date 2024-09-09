@@ -20,6 +20,7 @@ class Event(db.Model):
     end_time = db.Column(db.DateTime, nullable=False)
     status = db.Column(db.String(50))
     category_id = db.Column(db.String(50), db.ForeignKey('categories.id'))
+    location = db.Column(db.String(100))
 
 class CategoryTable(db.Model):
     __tablename__ = 'categories'

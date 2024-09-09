@@ -13,7 +13,8 @@ def initialize_api_models(api):
         'end_time': fields.DateTime(required=True, description='Event end time', example='2024-06-01T11:00:00'),
         'status': fields.String(required=True, description='Event status'),
         'categoryName': fields.String(required=True),
-        'categoryColor': fields.String(required=True)
+        'categoryColor': fields.String(required=True),
+        'location': fields.String(required=True)
     })
 
     events_update_model = api.model('Update event', {
@@ -24,7 +25,8 @@ def initialize_api_models(api):
         'end_time': fields.DateTime(required=True, description='Event end time', example='2024-06-01T11:00:00'),
         'status': fields.String(required=True, description='Event status'),
         'categoryName': fields.String(required=True),
-        'categoryColor': fields.String(required=True)
+        'categoryColor': fields.String(required=True),
+        'location': fields.String(required=True)
     })
 
     events_delete_model = api.model('Delete event', {

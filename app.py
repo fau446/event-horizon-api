@@ -151,7 +151,8 @@ class Events(Resource):
                         'start_time': event.start_time.isoformat(),
                         'end_time': event.end_time.isoformat(),
                         'status': event.status,
-                        'category_id': event.category_id
+                        'category_id': event.category_id,
+                        'location': event.location
                     }
                     for event in events
                 ]
@@ -206,7 +207,8 @@ class Events(Resource):
                 start_time=data['start_time'],
                 end_time=data['end_time'],
                 status=data['status'],
-                category_id=category_id
+                category_id=category_id,
+                location=data['location']
             )
             db.session.add(new_event)
             db.session.commit()
@@ -242,7 +244,6 @@ class Events(Resource):
             if category:
                 event.category_id = category.id
             else:
-                print("new category")
                 new_category = CategoryTable(
                     name=data['categoryName'],
                     user_id= user.id,
@@ -258,14 +259,13 @@ class Events(Resource):
             event.start_time = data['start_time']
             event.end_time = data['end_time']
             event.status = data['status']
+            event.location = data['location']
             db.session.flush()
             
             # delete the category if there are no more events
             remaining_events = Event.query.filter_by(category_id=old_category_id, user_id=user.id).first()
-            print("test1")
             if not remaining_events:
                 # delete the category
-                print("Delete Category")
                 category = CategoryTable.query.filter_by(id=old_category_id, user_id=user.id).first()
                 db.session.delete(category)
 
