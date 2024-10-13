@@ -169,12 +169,13 @@ class Events(Resource):
         data = request.json
 
         # check if data contains fields that are empty
-        required_fields = ['title', 'body', 'start_time', 'end_time', 'status', 'categoryName']
+        required_fields = ['title', 'start_time', 'status', 'categoryName']
         missing_fields = [field for field in required_fields if not data.get(field)]
         if missing_fields:
             return {'error': f'Missing fields: {", ".join(missing_fields)}'}, 400
 
-        
+        if data['end_time'] == "":
+            data['end_time'] = data['start_time']
 
         try:
             current_user_email = get_jwt_identity()
@@ -184,8 +185,6 @@ class Events(Resource):
             
             # check if category already exists
             category = CategoryTable.query.filter_by(name=data['categoryName'], user_id=user.id).first()
-
-            # category_id = 0
 
             if category:
                 category_id = category.id
@@ -222,6 +221,15 @@ class Events(Resource):
     @event_ns.expect(events_update_model)
     def put(self):
         data = request.json
+
+        # check if data contains fields that are empty
+        required_fields = ['title', 'start_time', 'status', 'categoryName']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        if missing_fields:
+            return {'error': f'Missing fields: {", ".join(missing_fields)}'}, 400
+
+        if data['end_time'] == "":
+            data['end_time'] = data['start_time']
 
         try:
             current_user_email = get_jwt_identity()
