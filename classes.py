@@ -9,6 +9,7 @@ class User(db.Model):
     email = db.Column(db.String(50), nullable=False, unique=True)
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    time_zone = db.Column(db.String(64))
 
 class Event(db.Model):
     __tablename__ = 'events'
@@ -18,6 +19,7 @@ class Event(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime, nullable=False)
+    reminder_time = db.Column(db.DateTime, nullable=True)
     status = db.Column(db.String(50))
     category_id = db.Column(db.String(50), db.ForeignKey('categories.id'))
     location = db.Column(db.String(100))

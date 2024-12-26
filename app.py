@@ -1,21 +1,24 @@
+import os
+from datetime import datetime, timedelta, timezone
+
+import pytz
+from dotenv import load_dotenv
 from flask import Flask, request
-from flask_restx import Api, Resource, fields
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
-from sqlalchemy.sql import func
 from flask_jwt_extended import (
+    JWTManager,
     create_access_token,
     get_jwt,
     get_jwt_identity,
     jwt_required,
-    JWTManager
 )
-import os
-from dotenv import load_dotenv
-from datetime import datetime, timezone, timedelta
+from flask_restx import Api, Resource
+from sqlalchemy.sql import func
 
+from classes import CategoryTable, Event, TokenBlocklist, User, db
 from models import initialize_api_models
-from classes import db, User, Event, CategoryTable, TokenBlocklist
+from reminder_system import ReminderSystem
 
 load_dotenv()
 
@@ -30,6 +33,10 @@ api = Api(app)
 bcrypt = Bcrypt(app)
 cors = CORS(app)
 
+reminder_system = ReminderSystem()
+# reminder_system.add_reminder("0", "First Job")
+# reminder_system.add_reminder("1", "Second Job")
+
 # Initialize API models
 models = initialize_api_models(api)
 signup_and_login_model = models['signup_and_login_model']
@@ -43,6 +50,7 @@ category_color_change_model = models['category_color_change_model']
 auth_ns = api.namespace('auth', description='Authentication operations')
 event_ns = api.namespace('events', description='Event operations')
 category_ns = api.namespace('category', description='Category operations')
+timezone_ns = api.namespace('timezone', description='Timezone operations')
 
 @jwt.token_in_blocklist_loader
 def check_if_token_revoked(jwt_header, jwt_payload: dict) -> bool:
@@ -103,8 +111,9 @@ class CheckLogin(Resource):
             if not user:
                 return {'error': 'User not found'}, 404
             else:
-                return {'message':'Authentication successful!' ,'logged_in_as': current_user_email}, 200
+                return {'message':'Authentication successful!' ,'logged_in_as': current_user_email, 'time_zone': user.time_zone}, 200
         except Exception as e:
+            print(str(e))
             return {'error': f'Authentication failed: {str(e)}'}, 500
 
 @auth_ns.route('/logout')
@@ -207,10 +216,18 @@ class Events(Resource):
                 end_time=data['end_time'],
                 status=data['status'],
                 category_id=category_id,
-                location=data['location']
+                location=data['location'],
+                reminder_time=data['reminder_time']
             )
             db.session.add(new_event)
             db.session.commit()
+
+            # add reminder to the scheduler
+            if data['reminder_time']:
+                # need to somehow get the event_id
+                print("Event Id: " + str(new_event.id))
+                reminder_system.add_reminder(str(new_event.id), str(new_event.id))
+                pass
 
             return {'message': 'Event creation successful'}, 201
         except Exception as e:
@@ -319,7 +336,6 @@ class Events(Resource):
         except Exception as e:
             return {'error': str(e)}, 500
 
-
 # Category routes
 @category_ns.route('/')
 class Category(Resource):
@@ -426,6 +442,33 @@ class CatgoryColor(Resource):
             db.session.rollback()
             return {'error': str(e)}, 500
         
+@timezone_ns.route('/')
+class TimeZone(Resource):
+    def get(self):
+        return pytz.common_timezones
+
+    @jwt_required()
+    def put(self):
+        data = request.json
+        all_valid_timezones = pytz.common_timezones
+
+        try:
+            current_user_email = get_jwt_identity()
+            user = User.query.filter_by(email=current_user_email).first()
+            if not user:
+                return {'error': 'User not found'}, 404
+            if data['timezone'] not in all_valid_timezones:
+                return {'error': 'Invalid timezone'}, 400
+
+            user.time_zone = data['timezone']
+
+            db.session.commit()
+            return {'message': 'Timezone was successfully changed!'}, 200
+
+        except Exception as e:
+            db.session.rollback()
+            print(str(e))
+            return {'error': f'Authentication failed: {str(e)}'}, 500
 
 if __name__ == '__main__':
     app.run(debug=True)

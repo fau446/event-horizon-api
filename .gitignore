@@ -19,3 +19,9 @@ drop_tables.py
 database.db
 create_test_data.py
 gunicorn.conf.py
+
+get-pip.py
+
+# Google Credentials
+credentials.json
+token.json
