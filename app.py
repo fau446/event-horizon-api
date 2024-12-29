@@ -33,7 +33,7 @@ api = Api(app)
 bcrypt = Bcrypt(app)
 cors = CORS(app)
 
-reminder_system = ReminderSystem()
+# reminder_system = ReminderSystem()
 # reminder_system.add_reminder("0", "First Job")
 # reminder_system.add_reminder("1", "Second Job")
 
@@ -152,19 +152,23 @@ class Events(Resource):
             events = Event.query.filter_by(user_id=user.id).all()
 
             if events:
-                events_list = [
-                    {
+                events_list = []
+
+                for event in events:
+                    if event.reminder_time is not None:
+                        event.reminder_time = event.reminder_time.isoformat()
+                    
+                    events_list.append({
                         'id': event.id,
                         'title': event.title,
                         'body': event.body,
                         'start_time': event.start_time.isoformat(),
                         'end_time': event.end_time.isoformat(),
+                        'reminder_time': event.reminder_time,
                         'status': event.status,
                         'category_id': event.category_id,
                         'location': event.location
-                    }
-                    for event in events
-                ]
+                    })
 
                 return {'events_list': events_list}, 200
             else:
@@ -185,6 +189,9 @@ class Events(Resource):
 
         if data['end_time'] == "":
             data['end_time'] = data['start_time']
+
+        if data['reminder_time'] == "":
+            data['reminder_time'] = None
 
         try:
             current_user_email = get_jwt_identity()
@@ -223,11 +230,11 @@ class Events(Resource):
             db.session.commit()
 
             # add reminder to the scheduler
-            if data['reminder_time']:
-                # need to somehow get the event_id
-                print("Event Id: " + str(new_event.id))
-                reminder_system.add_reminder(str(new_event.id), str(new_event.id))
-                pass
+            # if data['reminder_time']:
+            #     # need to somehow get the event_id
+            #     print("Event Id: " + str(new_event.id))
+            #     reminder_system.add_reminder(str(new_event.id), str(new_event.id))
+            #     pass
 
             return {'message': 'Event creation successful'}, 201
         except Exception as e:
@@ -247,6 +254,9 @@ class Events(Resource):
 
         if data['end_time'] == "":
             data['end_time'] = data['start_time']
+
+        if data['reminder_time'] == "":
+            data['reminder_time'] = None
 
         try:
             current_user_email = get_jwt_identity()
@@ -283,6 +293,7 @@ class Events(Resource):
             event.body = data['body']
             event.start_time = data['start_time']
             event.end_time = data['end_time']
+            event.reminder_time = data['reminder_time']
             event.status = data['status']
             event.location = data['location']
             db.session.flush()
