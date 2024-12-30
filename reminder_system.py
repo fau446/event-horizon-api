@@ -1,13 +1,17 @@
 import os
+from base64 import urlsafe_b64encode
 from datetime import datetime
+from email.mime.text import MIMEText
 from time import sleep
 
+import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from pytz import utc
 
 SCOPES = ["https://mail.google.com/"]
 our_email = "EventHorizonCalendar@gmail.com"
@@ -15,14 +19,30 @@ our_email = "EventHorizonCalendar@gmail.com"
 class ReminderSystem:
     def __init__(self):
         self.test_var = "Test"
-        self.scheduler = BackgroundScheduler()
-        if not self.gmail_authenticate():
+        self.scheduler = BackgroundScheduler(timezone=utc)
+        self.service = self.__gmail_authenticate()
+        if not self.service:
             return
         # should look through database for existing events that have reminders
         # add them to the scheduler
         self.scheduler.start()
 
-    def gmail_authenticate(self):
+    def add_reminder(self, event_id, user_email, event_title, time, user_time_zone):
+        reminder_time = self.__convert_to_utc(time, user_time_zone)
+
+        self.scheduler.add_job(self.__send_reminder, "date", run_date = reminder_time, id=event_id, args=[user_email, event_title])
+
+    def __convert_to_utc(self, time, user_time_zone):
+        local_time = datetime.strptime(time, "%Y-%m-%dT%H:%M")
+
+        tz = pytz.timezone(user_time_zone)
+        local_time_with_tz = tz.localize(local_time)
+        
+        utc_time = local_time_with_tz.astimezone(pytz.utc)
+        
+        return utc_time
+
+    def __gmail_authenticate(self):
         creds = None
         # The file token.json stores the user's access and refresh tokens, and is
         # created automatically when the authorization flow completes for the first
@@ -61,15 +81,29 @@ class ReminderSystem:
             print(f"An error occurred: {error}")
             return False
 
-    # def send_reminder(self):
+    def __send_reminder(self, user_email, event_title):
+        self.__send_message(self.service, user_email, f"[Event Horizon]: Reminder for {event_title}", "This is the message")
 
-    def add_reminder(self, event_id, msg):
-        self.scheduler.add_job(self.display, "interval", seconds=3, args=[msg], id=event_id)
+    def __build_message(self, destination, obj, body):
+        message = MIMEText(body)
+        message["to"] = destination
+        message["from"] = our_email
+        message["subject"] = obj
+        return {"raw": urlsafe_b64encode(message.as_bytes()).decode()}
+    
+    def __send_message(self, service, destination, obj, body):
+        return (
+            service.users()
+            .messages()
+            .send(userId="me", body=self.__build_message(destination, obj, body))
+            .execute()
+        )
 
     # whenever the user deletes the reminder time or deletes the event
     # def delete_reminder(self, event_id):
     #     self.scheduler.remove_job(event_id)
 
+    # used for testing, remove after
     def display(self, msg):
         print(msg)
 

@@ -33,9 +33,7 @@ api = Api(app)
 bcrypt = Bcrypt(app)
 cors = CORS(app)
 
-# reminder_system = ReminderSystem()
-# reminder_system.add_reminder("0", "First Job")
-# reminder_system.add_reminder("1", "Second Job")
+reminder_system = ReminderSystem()
 
 # Initialize API models
 models = initialize_api_models(api)
@@ -230,11 +228,10 @@ class Events(Resource):
             db.session.commit()
 
             # add reminder to the scheduler
-            # if data['reminder_time']:
-            #     # need to somehow get the event_id
-            #     print("Event Id: " + str(new_event.id))
-            #     reminder_system.add_reminder(str(new_event.id), str(new_event.id))
-            #     pass
+            if data['reminder_time']:
+                print("Adding reminder")
+                print("Event Id: " + str(new_event.id))
+                reminder_system.add_reminder(str(new_event.id), current_user_email, data['title'], data['reminder_time'], user.time_zone)
 
             return {'message': 'Event creation successful'}, 201
         except Exception as e:
