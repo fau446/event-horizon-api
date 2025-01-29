@@ -22,6 +22,8 @@ gunicorn.conf.py
 
 get-pip.py
 
+local_db_query.sql
+
 # Google Credentials
 credentials.json
 token.json

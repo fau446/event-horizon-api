@@ -18,7 +18,7 @@ from sqlalchemy.sql import func
 
 from classes import CategoryTable, Event, TokenBlocklist, User, db
 from models import initialize_api_models
-from reminder_system import ReminderSystem
+# from reminder_system import ReminderSystem
 
 load_dotenv()
 
@@ -33,7 +33,7 @@ api = Api(app)
 bcrypt = Bcrypt(app)
 cors = CORS(app)
 
-reminder_system = ReminderSystem()
+# reminder_system = ReminderSystem()
 
 # Initialize API models
 models = initialize_api_models(api)
@@ -72,7 +72,7 @@ class SignUp(Resource):
                 return {'error': 'User already exists, please login with your email and password.'}, 401
             
             # create new user
-            new_user = User(email=data['email'], password_hash=pw_hash)
+            new_user = User(email=data['email'], password_hash=pw_hash, time_zone='UTC')
             db.session.add(new_user)
             db.session.commit()
 
@@ -172,6 +172,7 @@ class Events(Resource):
             else:
                 return {'events_list': []}, 200
         except Exception as e:
+            print(str(e))
             return {'error': str(e)}, 500
 
     @jwt_required()
@@ -231,7 +232,7 @@ class Events(Resource):
             if data['reminder_time']:
                 print("Adding reminder")
                 print("Event Id: " + str(new_event.id))
-                reminder_system.add_reminder(str(new_event.id), current_user_email, data['title'], data['reminder_time'], user.time_zone)
+                # reminder_system.add_reminder(str(new_event.id), current_user_email, data['title'], data['reminder_time'], user.time_zone)
 
             return {'message': 'Event creation successful'}, 201
         except Exception as e:
