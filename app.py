@@ -18,13 +18,13 @@ from sqlalchemy.sql import func
 
 from classes import CategoryTable, Event, TokenBlocklist, User, db
 from models import initialize_api_models
-# from reminder_system import ReminderSystem
+from reminder_system import ReminderSystem
 
 load_dotenv()
 
 app = Flask(__name__)
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=4)
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=12)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
 db.init_app(app)
 
@@ -33,7 +33,7 @@ api = Api(app)
 bcrypt = Bcrypt(app)
 cors = CORS(app)
 
-# reminder_system = ReminderSystem()
+reminder_system = ReminderSystem()
 
 # Initialize API models
 models = initialize_api_models(api)
@@ -232,7 +232,8 @@ class Events(Resource):
             if data['reminder_time']:
                 print("Adding reminder")
                 print("Event Id: " + str(new_event.id))
-                # reminder_system.add_reminder(str(new_event.id), current_user_email, data['title'], data['reminder_time'], user.time_zone)
+                # maybe just send the entire event over
+                reminder_system.add_reminder(str(new_event.id), current_user_email, user.time_zone, data)
 
             return {'message': 'Event creation successful'}, 201
         except Exception as e:
@@ -255,6 +256,7 @@ class Events(Resource):
 
         if data['reminder_time'] == "":
             data['reminder_time'] = None
+            reminder_system.delete_reminder(str(data['id']))
 
         try:
             current_user_email = get_jwt_identity()
@@ -329,6 +331,8 @@ class Events(Resource):
             
             category_id = event.category_id
             
+            reminder_system.delete_reminder(str(event.id))
+
             db.session.delete(event)
             db.session.flush()
 
@@ -406,11 +410,10 @@ class Category(Resource):
                 return {'error': 'User not found'}, 404
 
             events_to_delete = Event.query.filter_by(user_id=user.id, category_id=data['id']).all()
-            # if not events_to_delete:
-            #     return {'error', 'No events found with the specified category'}, 404
 
             if events_to_delete:
                 for event in events_to_delete:
+                    reminder_system.delete_reminder(str(event.id))
                     db.session.delete(event)
             
             category_to_delete = CategoryTable.query.filter_by(user_id=user.id, id=data['id']).first()

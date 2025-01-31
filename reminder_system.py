@@ -27,10 +27,12 @@ class ReminderSystem:
         # add them to the scheduler
         self.scheduler.start()
 
-    def add_reminder(self, event_id, user_email, event_title, time, user_time_zone):
-        reminder_time = self.__convert_to_utc(time, user_time_zone)
+    def add_reminder(self, event_id, user_email, user_time_zone, event):
+        reminder_time = self.__convert_to_utc(event['reminder_time'], user_time_zone)
 
-        self.scheduler.add_job(self.__send_reminder, "date", run_date = reminder_time, id=event_id, args=[user_email, event_title])
+        print(event)
+
+        self.scheduler.add_job(self.__send_reminder, "date", run_date=reminder_time, id=event_id, args=[user_email, event])
 
     def __convert_to_utc(self, time, user_time_zone):
         local_time = datetime.strptime(time, "%Y-%m-%dT%H:%M")
@@ -81,8 +83,13 @@ class ReminderSystem:
             print(f"An error occurred: {error}")
             return False
 
-    def __send_reminder(self, user_email, event_title):
-        self.__send_message(self.service, user_email, f"[Event Horizon]: Reminder for {event_title}", "This is the message")
+    def __send_reminder(self, user_email, event):
+        subject_line = f"[Event Horizon]: Reminder for {event['title']}"
+        formatted_msg = self.__format_message(event)
+
+        print(f"Sending Reminder {event['title']} to {user_email}")
+
+        self.__send_message(self.service, user_email, subject_line,formatted_msg)
 
     def __build_message(self, destination, obj, body):
         message = MIMEText(body)
@@ -90,6 +97,27 @@ class ReminderSystem:
         message["from"] = our_email
         message["subject"] = obj
         return {"raw": urlsafe_b64encode(message.as_bytes()).decode()}
+    
+    def __format_message(self, event):
+        end_time, location, body = '', '', ''
+
+        start_time = event['start_time'].replace("T", " ")
+
+        if event['end_time'] != '':
+            end_time = f"End Time: {event['end_time'].replace("T", " ")}\n"
+
+        if event['location'] != '':
+            location = f"Location: {event['location']}\n"
+
+        if event['body'] != '':
+            body = f"Description: \n{event['body']}"
+
+        return (f"Title: {event['title']}\n"
+                f"Start Time: {start_time}\n"
+                f"{end_time}"
+                f"Category: {event['categoryName']}\n"
+                f"{location}"
+                f"{body}")
     
     def __send_message(self, service, destination, obj, body):
         return (
@@ -100,12 +128,14 @@ class ReminderSystem:
         )
 
     # whenever the user deletes the reminder time or deletes the event
-    # def delete_reminder(self, event_id):
-    #     self.scheduler.remove_job(event_id)
+    def delete_reminder(self, event_id):
+        job = self.scheduler.get_job(event_id)
 
-    # used for testing, remove after
-    def display(self, msg):
-        print(msg)
+        if job is None:
+            print(f"Event {event_id} does not exist")
+        else:
+            print(f"Deleting event: {event_id}")
+            self.scheduler.remove_job(event_id)
 
     # edit reminder function
     # whenever the user edits the reminder time on an event
